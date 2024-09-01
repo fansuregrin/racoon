@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<racoon>
+  <log>
+    <log_level>DEBUG</log_level>
+    <log_filename>test_rpc_server</log_filename>
+    <log_dir>../logs/</log_dir>
+    <log_max_file_size>4194304</log_max_file_size>
+  </log>
+
+  <server>
+    <port>8967</port>
+    <io_threads>2</io_threads>
+  </server>
+</racoon>
