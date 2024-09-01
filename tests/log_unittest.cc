@@ -83,7 +83,7 @@ TEST_F(AsyncLoggerTest, Init) {
 TEST(LogTest, Log) {
     auto &logger = racoon::AsyncLogger::GetInstance();
     logger.Init(racoon::AsyncLogger::LOG_TYPE_STDOUT_FILE,
-        "./logs", "log_test", 1<<20, racoon::DEBUG);
+        "./logs", "log_test", 1<<10, racoon::DEBUG);
     LOG_DEBUG("this is a debug log");
     LOG_DEBUG("%d dollar", 10);
     LOG_INFO("this is a info log");

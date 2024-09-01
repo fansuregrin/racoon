@@ -111,32 +111,16 @@ int max_file_size, LogLevel log_level) {
     int len = std::strftime(suffix, sizeof(suffix)-1, "_%Y%m%d", &now_tm);
     lck.lock();
     int seq_no = m_seq_no;
-    int max_file_size_ = m_max_file_size;
     std::string fullpath = m_logdir + m_filename;
     lck.unlock();
-    snprintf(suffix+len, sizeof(suffix)-len-1, "_%d%s", seq_no++, ext);
+    snprintf(suffix+len, sizeof(suffix)-len-1, "_%d%s", seq_no, ext);
     FILE * tmp =  std::fopen((fullpath + suffix).c_str(), "a");
     if (!tmp) {
         std::perror("fopen failed");
         exit(EXIT_FAILURE);
     }
-    while (std::ftell(tmp) >= max_file_size_) {
-        std::fclose(tmp);
-        lck.lock();
-        max_file_size_ = m_max_file_size;
-        fullpath = m_logdir + m_filename;
-        lck.unlock();
-        snprintf(suffix+len, sizeof(suffix)-len-1, "_%d%s", seq_no++, ext);
-        tmp = std::fopen((fullpath + suffix).c_str(), "a");
-        if (!tmp) {
-            std::perror("fopen failed");
-            exit(EXIT_FAILURE);
-        }
-    }
     lck.lock();
     m_fp = tmp;
-    m_filename = filename;
-    m_seq_no = seq_no - 1;
     m_closed = false;
 }
 
@@ -152,11 +136,11 @@ void AsyncLogger::AsyncWrite() {
             printf("%s", msg.c_str());
         }
         if (m_type && FILE_MASK) {
-            if (std::ftell(m_fp) >= m_max_file_size) {
+            while (std::ftell(m_fp) >= m_max_file_size) {
                 tm now_tm = GetCurrentTime();
                 char suffix[24] = {0};
-                int len = std::strftime(suffix, sizeof(suffix)-1, "_%y%m%d", &now_tm);
-                snprintf(suffix, sizeof(suffix)-len-1, "_%d%s", m_seq_no, ext);
+                int len = std::strftime(suffix, sizeof(suffix)-1, "_%Y%m%d", &now_tm);
+                snprintf(suffix+len, sizeof(suffix)-len-1, "_%d%s", ++m_seq_no, ext);
                 std::fclose(m_fp);
                 m_fp = nullptr;
                 FILE *tmp = std::fopen((m_logdir+m_filename+suffix).c_str(), "a");
