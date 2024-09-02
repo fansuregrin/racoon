@@ -99,6 +99,7 @@ private:
     std::string m_logdir;    // 日志目录
     int m_max_file_size;     // 单个日志文件最大容量，单位为字节
     bool m_closed;           // 关闭标志
+    bool m_inited;           // 初始化标志
     FILE *m_fp;              // 文件指针
     mutable std::mutex m_mtx;
     std::unique_ptr<std::thread> m_write_thread; // 写日志线程

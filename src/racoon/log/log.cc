@@ -69,7 +69,7 @@ AsyncLogger &AsyncLogger::GetInstance() {
 }
 
 AsyncLogger::AsyncLogger()
-: m_type(0), m_log_level(UNKNOWN), m_closed(true), m_fp(nullptr) {}
+: m_type(0), m_log_level(UNKNOWN), m_closed(true), m_inited(false), m_fp(nullptr) {}
 
 AsyncLogger::~AsyncLogger() {}
 
@@ -81,6 +81,7 @@ void AsyncLogger::Flush() {
 void AsyncLogger::Init(uint8_t type, const std::string &logdir, const std::string &filename,
 int max_file_size, LogLevel log_level) {
     std::unique_lock<std::mutex> lck(m_mtx);
+    if (m_inited) return;
     m_type = type;
     m_log_level = log_level;
     m_logdir = logdir;
@@ -98,7 +99,6 @@ int max_file_size, LogLevel log_level) {
         Flush();
         std::fclose(m_fp);
     }
-    lck.unlock();
 
     int ret = mkdir(logdir.c_str(), 0755);
     if (ret < 0 && errno != EEXIST) {
@@ -109,18 +109,14 @@ int max_file_size, LogLevel log_level) {
     tm now_tm = GetCurrentTime();
     char suffix[24] = {0};
     int len = std::strftime(suffix, sizeof(suffix)-1, "_%Y%m%d", &now_tm);
-    lck.lock();
-    int seq_no = m_seq_no;
-    std::string fullpath = m_logdir + m_filename;
-    lck.unlock();
-    snprintf(suffix+len, sizeof(suffix)-len-1, "_%d%s", seq_no, ext);
-    FILE * tmp =  std::fopen((fullpath + suffix).c_str(), "a");
+    snprintf(suffix+len, sizeof(suffix)-len-1, "_%d%s", m_seq_no, ext);
+    FILE * tmp =  std::fopen((m_logdir + m_filename + suffix).c_str(), "a");
     if (!tmp) {
         std::perror("fopen failed");
         exit(EXIT_FAILURE);
     }
-    lck.lock();
     m_fp = tmp;
+    m_inited = true;
     m_closed = false;
 }
 
@@ -178,6 +174,7 @@ void AsyncLogger::CloseLogger() {
         std::fclose(m_fp);
         m_fp = nullptr;
     }
+    m_inited = false;
     m_closed = true;
 }
 
