@@ -71,11 +71,8 @@ AsyncLogger &AsyncLogger::GetInstance() {
 AsyncLogger::AsyncLogger()
 : m_type(0), m_log_level(UNKNOWN), m_closed(true), m_inited(false), m_fp(nullptr) {}
 
-AsyncLogger::~AsyncLogger() {}
-
-void AsyncLogger::Flush() {
-    m_queue->flush();
-    std::fflush(m_fp);
+AsyncLogger::~AsyncLogger() {
+    CloseLogger();
 }
 
 void AsyncLogger::Init(uint8_t type, const std::string &logdir, const std::string &filename,
@@ -96,7 +93,6 @@ int max_file_size, LogLevel log_level) {
         GetInstance().AsyncWrite();
     }));
     if (m_fp) {
-        Flush();
         std::fclose(m_fp);
     }
 
@@ -144,7 +140,6 @@ void AsyncLogger::AsyncWrite() {
                 m_fp = tmp;
             }
             std::fputs(msg.c_str(), m_fp);
-            Flush();
         }
     }
 }
@@ -156,11 +151,9 @@ bool AsyncLogger::Closed() const {
 
 void AsyncLogger::CloseLogger() {
     std::unique_lock<std::mutex> lck(m_mtx);
+    if (m_closed) return;
     if (m_queue) {
         lck.unlock();
-        while (!m_queue->empty()) {
-            m_queue->flush();
-        }
         m_queue->close();
     }
     lck.lock();
@@ -170,7 +163,6 @@ void AsyncLogger::CloseLogger() {
     }
     lck.lock();
     if (m_fp) {
-        Flush();
         std::fclose(m_fp);
         m_fp = nullptr;
     }

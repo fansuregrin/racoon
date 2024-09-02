@@ -24,7 +24,7 @@ public:
     using reference = value_type &;
     using const_reference = const value_type &;
 
-    BlockingQueue(size_type max_cap = 256);
+    BlockingQueue(size_type cap = 256);
     ~BlockingQueue();
 
     value_type front();
@@ -36,25 +36,24 @@ public:
     size_type capacity() noexcept;
 
     void clear() noexcept;
-    void push(const T &ele);
+    bool push(const T &ele);
     bool pop(T &ele);
 
-    void flush();
     void close();
 private:
     std::deque<T> deq;
     std::mutex mtx;
-    size_type cap;
+    size_type m_cap;
     std::condition_variable producer;
     std::condition_variable consumer;
     bool is_close;
+    bool push_paused;
+    bool pop_paused;
 };
 
 template <typename T>
-inline BlockingQueue<T>::BlockingQueue(size_type max_cap)
-: cap(max_cap) {
-    is_close = false;
-}
+inline BlockingQueue<T>::BlockingQueue(size_type cap)
+: m_cap(cap), is_close(false), push_paused(false), pop_paused(false) {}
 
 template <typename T>
 BlockingQueue<T>::~BlockingQueue() {
@@ -82,7 +81,7 @@ bool BlockingQueue<T>::empty() noexcept {
 template <typename T>
 bool BlockingQueue<T>::full() noexcept {
     lock_guard lck(mtx);
-    return deq.size() >= cap;
+    return deq.size() >= m_cap;
 }
 
 template <typename T>
@@ -96,7 +95,7 @@ template <typename T>
 typename BlockingQueue<T>::size_type
 BlockingQueue<T>::capacity() noexcept {
     lock_guard lck(mtx);
-    return cap;
+    return m_cap;
 }
 
 template <typename T>
@@ -106,37 +105,44 @@ void BlockingQueue<T>::clear() noexcept {
 }
 
 template <typename T>
-void BlockingQueue<T>::push(const T &ele) {
+bool BlockingQueue<T>::push(const T &ele) {
     unique_lock lck(mtx);
-    producer.wait(lck, [this]{ return is_close || deq.size() < cap; });
-    if (is_close) return;
+    producer.wait(lck, [this]{
+        return is_close || (!push_paused && deq.size() < m_cap);
+    });
+    if (is_close) return false;
     deq.push_back(ele);
+    lck.unlock();
     consumer.notify_one();
+    return true;
 }
 
 template <typename T>
 bool BlockingQueue<T>::pop(T &ele) {
     unique_lock lck(mtx);
-    consumer.wait(lck, [this]{ return is_close || !deq.empty(); });
+    consumer.wait(lck, [this]{
+        return is_close || (!pop_paused && !deq.empty());
+    });
     if (is_close) return false;
     ele = deq.front();
     deq.pop_front();
+    lck.unlock();
     producer.notify_one();
     return true;
 }
 
 template <typename T>
-void BlockingQueue<T>::flush() {
-    consumer.notify_one();
-}
-
-template <typename T>
 void BlockingQueue<T>::close() {
-    {
-        lock_guard lck(mtx);
-        deq.clear();
-        is_close = true;
+    unique_lock lck(mtx);
+    if (is_close) return;
+    push_paused = true;
+    while (!deq.empty()) {
+        lck.unlock();
+        consumer.notify_all();
+        lck.lock();
     }
+    is_close = true;
+    lck.unlock();
     producer.notify_all();
     consumer.notify_all();
 }

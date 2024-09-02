@@ -34,8 +34,7 @@ TEST(BlockingQueueTest, PushAndPop) {
     auto consume = [&]{
         std::set<int> res;
         int val;
-        while (!queue.empty()) {
-            queue.pop(val);
+        while (queue.pop(val)) {
             res.insert(val);
             std::this_thread::yield();
         }
@@ -46,7 +45,10 @@ TEST(BlockingQueueTest, PushAndPop) {
     auto res2_ft = std::async(std::launch::async, consume);
     auto res3_ft = std::async(std::launch::async, consume);
 
-    pro1.join(), pro2.join();
+    pro1.join();
+    pro2.join();
+
+    queue.close();
 
     auto const res1 = res1_ft.get();
     auto const res2 = res2_ft.get();
